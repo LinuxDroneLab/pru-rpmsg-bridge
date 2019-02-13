@@ -1,5 +1,5 @@
 # Auto detect text files and perform LF normalization
-*        text=auto  eol=lf
+*.*        text=auto  eol=lf
 
 *.cs     text diff=csharp
 *.java   text diff=java
@@ -10,12 +10,12 @@
 *.css    text
 *.js     text
 *.sql    text
-#*.c      text
-#*.cpp    text
-#*.h      text
-#*.hpp    text
-#*.dts    text
-#*.cmd    text 
+*.c      text
+*.cpp    text
+*.h      text
+*.hpp    text
+*.dts    text
+*.cmd    text 
 
 *.sh     text eol=lf
 
