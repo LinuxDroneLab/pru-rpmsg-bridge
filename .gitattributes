@@ -10,12 +10,12 @@
 *.css    text
 *.js     text
 *.sql    text
-*.c      text
-*.cpp    text
-*.h      text
-*.hpp    text
-*.dts    text
-*.cmd    text 
+#*.c      text
+#*.cpp    text
+#*.h      text
+#*.hpp    text
+#*.dts    text
+#*.cmd    text 
 
 *.sh     text eol=lf
 
