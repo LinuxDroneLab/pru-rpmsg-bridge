@@ -13,14 +13,14 @@ struct pru_rpmsg_transport transport;
 unsigned short src, dst, len;
 unsigned char received_arm_data[sizeof(PrbMessageType)] = { '\0' };
 unsigned char received_pru1_data[sizeof(PrbMessageType)] = { '\0' };
-int counter = 0;
+int counter32 = 0;
 
 static void prb_init_buffers()
 {
-    for (counter = 0; counter < sizeof(PrbMessageType); counter++)
+    for (counter32 = 0; counter32 < sizeof(PrbMessageType); counter32++)
     {
-        received_arm_data[counter] = '\0';
-        received_pru1_data[counter] = '\0';
+        received_arm_data[counter32] = '\0';
+        received_pru1_data[counter32] = '\0';
     }
 }
 
@@ -94,6 +94,18 @@ int main(void)
     while (1)
     {
         // receive message from ARM
+        // receive data from PRU1
+        if (CT_INTC.SECR0_bit.ENA_STS_31_0 & (1<<INT_P1_TO_P0))
+        {
+            CT_INTC.SICR_bit.STS_CLR_IDX = INT_P1_TO_P0;
+            // send data from PRU1 to ARM
+            __xin(SP_BANK_1,
+                  6,
+                  0,
+                  received_pru1_data);
+            pru_rpmsg_send(&transport, dst, src, received_pru1_data, sizeof(PrbMessageType));
+
+        } else
         if (CT_INTC.SECR0_bit.ENA_STS_31_0 & (1<<INT_ARM_TO_P0))
         {
             CT_INTC.SICR_bit.STS_CLR_IDX = INT_ARM_TO_P0;
@@ -108,18 +120,6 @@ int main(void)
                 // send interrupt to P1
                 CT_INTC.SRSR0_bit.RAW_STS_31_0 |= (1<<INT_P0_TO_P1);
             }
-        } else
-        // receive data from PRU1
-        if (CT_INTC.SECR0_bit.ENA_STS_31_0 & (1<<INT_P1_TO_P0))
-        {
-            CT_INTC.SICR_bit.STS_CLR_IDX = INT_P1_TO_P0;
-            // send data from PRU1 to ARM
-            __xin(SP_BANK_1,
-                  6,
-                  0,
-                  received_pru1_data);
-            pru_rpmsg_send(&transport, dst, src, received_pru1_data, sizeof(PrbMessageType));
-
         }
     }
 }
