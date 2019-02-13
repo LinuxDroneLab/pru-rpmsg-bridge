@@ -5,6 +5,9 @@
 #include "resource_table.h"
 
 #define VIRTIO_CONFIG_S_DRIVER_OK       4
+#define ROUND100(X)  (X < 0 ? (X-55)/100 : (X*10+55)/100)
+
+int32_t PRU_RPMSG_DEBUG_BUFF[4] = {0};
 
 volatile register uint32_t __R30;
 volatile register uint32_t __R31;
@@ -13,7 +16,17 @@ struct pru_rpmsg_transport transport;
 unsigned short src, dst, len;
 unsigned char received_arm_data[sizeof(PrbMessageType)] = { '\0' };
 unsigned char received_pru1_data[sizeof(PrbMessageType)] = { '\0' };
+PrbMessageType* received_pru1_data_struct = (PrbMessageType*)received_pru1_data;
+int32_t pru_rpmsg_temp = 0;
+
 int counter32 = 0;
+
+int16_t pru_rpmsg_discard_samples = 5000;
+int16_t pru_rpmsg_calibration_samples = 10000;
+int32_t pru_rpmsg_sumGyro[3] = {0};
+int16_t pru_rpmsg_gyro_offset[3] = {0};
+int16_t pru_rpmsg_gyro_sample_prev[3] = {0};
+
 
 static void prb_init_buffers()
 {
@@ -103,8 +116,45 @@ int main(void)
                   6,
                   0,
                   received_pru1_data);
-            pru_rpmsg_send(&transport, dst, src, received_pru1_data, sizeof(PrbMessageType));
+            if(received_pru1_data_struct->message_type == MPU_DATA_MSG_TYPE) {
+               if(pru_rpmsg_calibration_samples == 0) {
+                   // TODO: verificare se assegnabili direttamente su Gyro della IMU
+                   // Applico Offset
+                   received_pru1_data_struct->mpu_accel_gyro.gx -= pru_rpmsg_gyro_offset[0];
+                   received_pru1_data_struct->mpu_accel_gyro.gy -= pru_rpmsg_gyro_offset[1];
+                   received_pru1_data_struct->mpu_accel_gyro.gz -= pru_rpmsg_gyro_offset[2];
+                   // TODO: da rivedere. Filtro passa alto con alfa=0,68 (74,89Hz)
+                   pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gx - pru_rpmsg_gyro_sample_prev[0]);
+                   received_pru1_data_struct->mpu_accel_gyro.gx = pru_rpmsg_gyro_sample_prev[0] + ROUND100(pru_rpmsg_temp);
+                   pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gy - pru_rpmsg_gyro_sample_prev[1]);
+                   received_pru1_data_struct->mpu_accel_gyro.gx = pru_rpmsg_gyro_sample_prev[1] + ROUND100(pru_rpmsg_temp);
+                   pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gz - pru_rpmsg_gyro_sample_prev[2]);
+                   received_pru1_data_struct->mpu_accel_gyro.gx = pru_rpmsg_gyro_sample_prev[2] + ROUND100(pru_rpmsg_temp);
+               } else if(pru_rpmsg_discard_samples > 0) {
+                   pru_rpmsg_discard_samples--;
+               } else if(pru_rpmsg_calibration_samples > 0) {
+                   pru_rpmsg_calibration_samples--;
+                   pru_rpmsg_sumGyro[0] += received_pru1_data_struct->mpu_accel_gyro.gx;
+                   pru_rpmsg_sumGyro[1] += received_pru1_data_struct->mpu_accel_gyro.gy;
+                   pru_rpmsg_sumGyro[2] += received_pru1_data_struct->mpu_accel_gyro.gz;
+                   if(pru_rpmsg_calibration_samples == 0) {
+                       pru_rpmsg_gyro_offset[0] = (pru_rpmsg_sumGyro[0] > 0 ? ((pru_rpmsg_sumGyro[0]*100 + 55)/1000000) : ((pru_rpmsg_sumGyro[0]*100 - 55)/1000000));
+                       pru_rpmsg_gyro_offset[1] = (pru_rpmsg_sumGyro[1] > 0 ? ((pru_rpmsg_sumGyro[1]*100 + 55)/1000000) : ((pru_rpmsg_sumGyro[1]*100 - 55)/1000000));
+                       pru_rpmsg_gyro_offset[2] = (pru_rpmsg_sumGyro[2] > 0 ? ((pru_rpmsg_sumGyro[2]*100 + 55)/1000000) : ((pru_rpmsg_sumGyro[2]*100 - 55)/1000000));
+                       pru_rpmsg_gyro_sample_prev[0] = received_pru1_data_struct->mpu_accel_gyro.gx - pru_rpmsg_gyro_offset[0];
+                       pru_rpmsg_gyro_sample_prev[1] = received_pru1_data_struct->mpu_accel_gyro.gy - pru_rpmsg_gyro_offset[1];
+                       pru_rpmsg_gyro_sample_prev[2] = received_pru1_data_struct->mpu_accel_gyro.gz - pru_rpmsg_gyro_offset[2];
+                       PRU_RPMSG_DEBUG_BUFF[0] = pru_rpmsg_gyro_offset[0];
+                       PRU_RPMSG_DEBUG_BUFF[1] = pru_rpmsg_gyro_offset[1];
+                       PRU_RPMSG_DEBUG_BUFF[2] = pru_rpmsg_gyro_offset[2];
 
+                       pru_rpmsg_sumGyro[0] = 0;
+                       pru_rpmsg_sumGyro[1] = 0;
+                       pru_rpmsg_sumGyro[2] = 0;
+                   }
+               }
+            }
+            pru_rpmsg_send(&transport, dst, src, received_pru1_data, sizeof(PrbMessageType));
         } else
         if (CT_INTC.SECR0_bit.ENA_STS_31_0 & (1<<INT_ARM_TO_P0))
         {
