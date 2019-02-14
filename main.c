@@ -127,9 +127,13 @@ int main(void)
                    pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gx - pru_rpmsg_gyro_sample_prev[0]);
                    received_pru1_data_struct->mpu_accel_gyro.gx = pru_rpmsg_gyro_sample_prev[0] + ROUND100(pru_rpmsg_temp);
                    pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gy - pru_rpmsg_gyro_sample_prev[1]);
-                   received_pru1_data_struct->mpu_accel_gyro.gx = pru_rpmsg_gyro_sample_prev[1] + ROUND100(pru_rpmsg_temp);
+                   received_pru1_data_struct->mpu_accel_gyro.gy = pru_rpmsg_gyro_sample_prev[1] + ROUND100(pru_rpmsg_temp);
                    pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gz - pru_rpmsg_gyro_sample_prev[2]);
-                   received_pru1_data_struct->mpu_accel_gyro.gx = pru_rpmsg_gyro_sample_prev[2] + ROUND100(pru_rpmsg_temp);
+                   received_pru1_data_struct->mpu_accel_gyro.gz = pru_rpmsg_gyro_sample_prev[2] + ROUND100(pru_rpmsg_temp);
+                   pru_rpmsg_gyro_sample_prev[0] = received_pru1_data_struct->mpu_accel_gyro.gx;
+                   pru_rpmsg_gyro_sample_prev[1] = received_pru1_data_struct->mpu_accel_gyro.gy;
+                   pru_rpmsg_gyro_sample_prev[2] = received_pru1_data_struct->mpu_accel_gyro.gz;
+
                } else if(pru_rpmsg_discard_samples > 0) {
                    pru_rpmsg_discard_samples--;
                } else if(pru_rpmsg_calibration_samples > 0) {
