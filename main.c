@@ -138,9 +138,9 @@ int main(void)
                    pru_rpmsg_sumGyro[1] += received_pru1_data_struct->mpu_accel_gyro.gy;
                    pru_rpmsg_sumGyro[2] += received_pru1_data_struct->mpu_accel_gyro.gz;
                    if(pru_rpmsg_calibration_samples == 0) {
-                       pru_rpmsg_gyro_offset[0] = (pru_rpmsg_sumGyro[0] > 0 ? ((pru_rpmsg_sumGyro[0]*100 + 55)/1000000) : ((pru_rpmsg_sumGyro[0]*100 - 55)/1000000));
-                       pru_rpmsg_gyro_offset[1] = (pru_rpmsg_sumGyro[1] > 0 ? ((pru_rpmsg_sumGyro[1]*100 + 55)/1000000) : ((pru_rpmsg_sumGyro[1]*100 - 55)/1000000));
-                       pru_rpmsg_gyro_offset[2] = (pru_rpmsg_sumGyro[2] > 0 ? ((pru_rpmsg_sumGyro[2]*100 + 55)/1000000) : ((pru_rpmsg_sumGyro[2]*100 - 55)/1000000));
+                       pru_rpmsg_gyro_offset[0] = ROUND100(pru_rpmsg_sumGyro[0]/100);
+                       pru_rpmsg_gyro_offset[1] = ROUND100(pru_rpmsg_sumGyro[1]/100);
+                       pru_rpmsg_gyro_offset[2] = ROUND100(pru_rpmsg_sumGyro[2]/100);
                        pru_rpmsg_gyro_sample_prev[0] = received_pru1_data_struct->mpu_accel_gyro.gx - pru_rpmsg_gyro_offset[0];
                        pru_rpmsg_gyro_sample_prev[1] = received_pru1_data_struct->mpu_accel_gyro.gy - pru_rpmsg_gyro_offset[1];
                        pru_rpmsg_gyro_sample_prev[2] = received_pru1_data_struct->mpu_accel_gyro.gz - pru_rpmsg_gyro_offset[2];
