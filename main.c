@@ -123,7 +123,8 @@ int main(void)
                    received_pru1_data_struct->mpu_accel_gyro.gx -= pru_rpmsg_gyro_offset[0];
                    received_pru1_data_struct->mpu_accel_gyro.gy -= pru_rpmsg_gyro_offset[1];
                    received_pru1_data_struct->mpu_accel_gyro.gz -= pru_rpmsg_gyro_offset[2];
-                   // TODO: da rivedere. Filtro passa alto con alfa=0,68 (74,89Hz)
+
+                   // TODO: da rivedere. Filtro gyro
                    pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gx - pru_rpmsg_gyro_sample_prev[0]);
                    received_pru1_data_struct->mpu_accel_gyro.gx = pru_rpmsg_gyro_sample_prev[0] + ROUND100(pru_rpmsg_temp);
                    pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gy - pru_rpmsg_gyro_sample_prev[1]);
