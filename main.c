@@ -5,7 +5,7 @@
 #include "resource_table.h"
 
 #define VIRTIO_CONFIG_S_DRIVER_OK       4
-#define ROUND100(X)  (X < 0 ? (X-55)/100 : (X*10+55)/100)
+#define ROUND100(X)  (X < 0 ? (X-55)/100 : (X+55)/100)
 
 int32_t PRU_RPMSG_DEBUG_BUFF[4] = {0};
 
@@ -125,11 +125,11 @@ int main(void)
                    received_pru1_data_struct->mpu_accel_gyro.gz -= pru_rpmsg_gyro_offset[2];
 
                    // TODO: da rivedere. Filtro gyro
-                   pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gx - pru_rpmsg_gyro_sample_prev[0]);
+                   pru_rpmsg_temp = 55*(received_pru1_data_struct->mpu_accel_gyro.gx - pru_rpmsg_gyro_sample_prev[0]);
                    received_pru1_data_struct->mpu_accel_gyro.gx = pru_rpmsg_gyro_sample_prev[0] + ROUND100(pru_rpmsg_temp);
-                   pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gy - pru_rpmsg_gyro_sample_prev[1]);
+                   pru_rpmsg_temp = 55*(received_pru1_data_struct->mpu_accel_gyro.gy - pru_rpmsg_gyro_sample_prev[1]);
                    received_pru1_data_struct->mpu_accel_gyro.gy = pru_rpmsg_gyro_sample_prev[1] + ROUND100(pru_rpmsg_temp);
-                   pru_rpmsg_temp = 25*(received_pru1_data_struct->mpu_accel_gyro.gz - pru_rpmsg_gyro_sample_prev[2]);
+                   pru_rpmsg_temp = 55*(received_pru1_data_struct->mpu_accel_gyro.gz - pru_rpmsg_gyro_sample_prev[2]);
                    received_pru1_data_struct->mpu_accel_gyro.gz = pru_rpmsg_gyro_sample_prev[2] + ROUND100(pru_rpmsg_temp);
                    pru_rpmsg_gyro_sample_prev[0] = received_pru1_data_struct->mpu_accel_gyro.gx;
                    pru_rpmsg_gyro_sample_prev[1] = received_pru1_data_struct->mpu_accel_gyro.gy;
