@@ -64,9 +64,16 @@
 /*
  * PID macros
  */
-#define PID_YPR(YPR,MX)  FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, (LIMIT(FXPOINT8_MULTIPLY(KE[YPR], pru_rpmsg_ang_acc_target[YPR]) >> 2,MX,-MX) + LIMIT(FXPOINT8_MULTIPLY(KEI[YPR], pru_rpmsg_ang_accI_target[YPR]) >> 2,MX,-MX) + LIMIT(FXPOINT8_MULTIPLY(KED[YPR], pru_rpmsg_ang_accD_target[YPR]) >> 2,MX,-MX)))
+#define PID_YPR(YPR,MX)  LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, ((FXPOINT8_MULTIPLY(KE[YPR], pru_rpmsg_ang_acc_target[YPR]) >> 2) + (FXPOINT8_MULTIPLY(KEI[YPR], pru_rpmsg_ang_accI_target[YPR]) >> 2) + (FXPOINT8_MULTIPLY(KED[YPR], pru_rpmsg_ang_accD_target[YPR]) >> 2))),MX,-MX)
 #define SHIFT_THROTTLE()  (GET_SCALED_CHAN_VALUE(PRU_RPMSG_THROTTLE_CHAN) + MAX_SCALED_THROTTLE)
-#define LSB_FIXPOINT_20   16009 // (1/65,5)*2^20
+#define LSB_FIXPOINT_20   16009 // (1/65.5)*2^20
+
+/*
+ * Motors macros
+ * range pwm [3125, 6250]
+ */
+#define SCALE_MOTORS_FACTOR      204800 // (3.125*2^16)
+#define SCALE_MOTORS_VALUE(V)    (3125 + FXPOINT16_MULTIPLY(SCALE_MOTORS_FACTOR, V))
 
 volatile register uint32_t __R30;
 volatile register uint32_t __R31;
@@ -111,7 +118,7 @@ int32_t pru_rpmsg_ang_accI_target[3] = { 0 };
 int32_t pru_rpmsg_ang_accD_target[3] = { 0 };
 uint8_t pru_rpmsg_imu_data_changed_flag = 0;
 uint8_t pru_rpmsg_rc_data_changed_flag = 0;
-int16_t pru_rpmsg_acc_motors_target[4] = { 0 };
+uint16_t pru_rpmsg_acc_motors_target[4] = { 0 };
 uint8_t pru_rpmsg_acc_motors_changed_flag = 0;
 
 /*
@@ -404,54 +411,47 @@ int main(void)
                 CT_INTC.SRSR0_bit.RAW_STS_31_0 |= (1 << INT_P0_TO_P1);
             }
         } // end if received message from ARM
-        else if (pru_rpmsg_imu_data_changed_flag || pru_rpmsg_rc_data_changed_flag) { // 5.8K bytes!
+        else if (pru_rpmsg_imu_data_changed_flag) {
             pru_rpmsg_imu_data_changed_flag = 0;
-
-            for(pru_rpmsg_temp = 0; pru_rpmsg_temp < 3; pru_rpmsg_temp++) {
-                // assign prev values
-                pru_rpmsg_ang_acc_target_prev[pru_rpmsg_temp]   =  pru_rpmsg_ang_acc_target[pru_rpmsg_temp];
-//                pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_YAW]   =  pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW];
-//                pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_PITCH] =  pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH];
-//                pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_ROLL]  =  pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL];
-            }
+            pru_rpmsg_rc_data_changed_flag = 0;
 
             // calculate new values
             pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW]   =  GET_SCALED_CHAN_VALUE(PRU_RPMSG_YAW_CHAN) - pru_rpmsg_gyro_sample_prev[PRU_RPMSG_Z];
-            pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH] =  GET_SCALED_CHAN_VALUE(PRU_RPMSG_PITCH_CHAN) - pru_rpmsg_gyro_sample_prev[PRU_RPMSG_Y];
+            // nota: lo stick aumenta per diminuire il pitch (lo stick viene negato)
+            pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH] =  -GET_SCALED_CHAN_VALUE(PRU_RPMSG_PITCH_CHAN) - pru_rpmsg_gyro_sample_prev[PRU_RPMSG_Y];
             pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL]  =  GET_SCALED_CHAN_VALUE(PRU_RPMSG_ROLL_CHAN) - pru_rpmsg_gyro_sample_prev[PRU_RPMSG_X];
 
             // gamma*inv(A)*(dw/dt)=a
+            // calculate integration
+            pru_rpmsg_ang_accI_target[PRU_RPMSG_YAW] = LIMIT(pru_rpmsg_ang_accI_target[PRU_RPMSG_YAW] + pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW], MAX_SCALED_YAW, -MAX_SCALED_YAW);
+            pru_rpmsg_ang_accI_target[PRU_RPMSG_PITCH] = LIMIT(pru_rpmsg_ang_accI_target[PRU_RPMSG_PITCH] + pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH], MAX_SCALED_PITCH, -MAX_SCALED_PITCH);
+            pru_rpmsg_ang_accI_target[PRU_RPMSG_ROLL] = LIMIT(pru_rpmsg_ang_accI_target[PRU_RPMSG_ROLL] + pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL], MAX_SCALED_ROLL, -MAX_SCALED_ROLL);
 
-            for(pru_rpmsg_temp = 0; pru_rpmsg_temp < 3; pru_rpmsg_temp++) {
-                // calculate integration
-                pru_rpmsg_ang_accI_target[pru_rpmsg_temp] += pru_rpmsg_ang_acc_target[pru_rpmsg_temp];
-//                pru_rpmsg_ang_accI_target[PRU_RPMSG_YAW] += pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW];
-//                pru_rpmsg_ang_accI_target[PRU_RPMSG_PITCH] += pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH];
-//                pru_rpmsg_ang_accI_target[PRU_RPMSG_ROLL] += pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL];
+            // calculate derivative
+            pru_rpmsg_ang_accD_target[PRU_RPMSG_YAW] = pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW] - pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_YAW];
+            pru_rpmsg_ang_accD_target[PRU_RPMSG_PITCH] = pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH] - pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_PITCH];
+            pru_rpmsg_ang_accD_target[PRU_RPMSG_ROLL] = pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL] - pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_ROLL];
 
-                // calculate derivative
-                pru_rpmsg_ang_accD_target[pru_rpmsg_temp] = pru_rpmsg_ang_acc_target[pru_rpmsg_temp] - pru_rpmsg_ang_acc_target_prev[pru_rpmsg_temp];
-//                pru_rpmsg_ang_accD_target[PRU_RPMSG_YAW] = pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW] - pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_YAW];
-//                pru_rpmsg_ang_accD_target[PRU_RPMSG_PITCH] = pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH] - pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_PITCH];
-//                pru_rpmsg_ang_accD_target[PRU_RPMSG_ROLL] = pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL] - pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_ROLL];
+            // save prev values
+            pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_YAW]   =  pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW];
+            pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_PITCH] =  pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH];
+            pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_ROLL]  =  pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL];
 
-            }
             // motors in [0,1000]
-            pru_rpmsg_acc_motors_target[PRU_RPMSG_M1] = LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE() -
-                    PID_YPR(PRU_RPMSG_YAW,MAX_SCALED_YAW) + PID_YPR(PRU_RPMSG_PITCH,MAX_SCALED_PITCH) - PID_YPR(PRU_RPMSG_ROLL,MAX_SCALED_ROLL)),0,1000);
-            pru_rpmsg_acc_motors_target[PRU_RPMSG_M2] = LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE() -
-                    PID_YPR(PRU_RPMSG_YAW,MAX_SCALED_YAW) - PID_YPR(PRU_RPMSG_PITCH,MAX_SCALED_PITCH) + PID_YPR(PRU_RPMSG_ROLL,MAX_SCALED_ROLL)),0,1000);
-            pru_rpmsg_acc_motors_target[PRU_RPMSG_M3] = LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE() +
-                    PID_YPR(PRU_RPMSG_YAW,MAX_SCALED_YAW) + PID_YPR(PRU_RPMSG_PITCH,MAX_SCALED_PITCH) + PID_YPR(PRU_RPMSG_ROLL,MAX_SCALED_ROLL)),0,1000);
-            pru_rpmsg_acc_motors_target[PRU_RPMSG_M4] = LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE() +
-                    PID_YPR(PRU_RPMSG_YAW,MAX_SCALED_YAW) - PID_YPR(PRU_RPMSG_PITCH,MAX_SCALED_PITCH) - PID_YPR(PRU_RPMSG_ROLL,MAX_SCALED_ROLL)),0,1000);
-            for(pru_rpmsg_temp = 0; pru_rpmsg_temp < 4; pru_rpmsg_temp++) {
-                received_pru1_data_struct->motors_vect.m[pru_rpmsg_temp] = pru_rpmsg_acc_motors_target[pru_rpmsg_temp];
-//                received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M1] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M1];
-//                received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M2] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M2];
-//                received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M3] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M3];
-//                received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M4] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M4];
-            }
+            pru_rpmsg_acc_motors_target[PRU_RPMSG_M1] = SCALE_MOTORS_VALUE(LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE())
+                   + PID_YPR(PRU_RPMSG_YAW,60) + PID_YPR(PRU_RPMSG_PITCH,250) - PID_YPR(PRU_RPMSG_ROLL,250),1000,0));
+            pru_rpmsg_acc_motors_target[PRU_RPMSG_M2] = SCALE_MOTORS_VALUE(LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE())
+                   + PID_YPR(PRU_RPMSG_YAW,60) - PID_YPR(PRU_RPMSG_PITCH,250) + PID_YPR(PRU_RPMSG_ROLL,250),1000,0));
+            pru_rpmsg_acc_motors_target[PRU_RPMSG_M3] = SCALE_MOTORS_VALUE(LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE())
+                   - PID_YPR(PRU_RPMSG_YAW,60) + PID_YPR(PRU_RPMSG_PITCH,250) + PID_YPR(PRU_RPMSG_ROLL,250),1000,0));
+            pru_rpmsg_acc_motors_target[PRU_RPMSG_M4] = SCALE_MOTORS_VALUE(LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE())
+                   - PID_YPR(PRU_RPMSG_YAW,60) - PID_YPR(PRU_RPMSG_PITCH,250) - PID_YPR(PRU_RPMSG_ROLL,250),1000,0));
+
+            received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M1] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M1];
+            received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M2] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M2];
+            received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M3] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M3];
+            received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M4] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M4];
+
             received_pru1_data_struct->message_type = MOTORS_DATA_MSG_TYPE;
             pru_rpmsg_send(&transport, dst, src, received_pru1_data,
                            sizeof(PrbMessageType));
@@ -471,7 +471,7 @@ int main(void)
             // F3 + F4 - F1 - F2 = yaw
             // F1 + F2 + F3 + F4 = thrust
             // +--+--+--+--+   +--+   +--+
-            // |-1|-1| 1| 1|   |F1|   |Y |
+            // | 1| 1|-1|-1|   |F1|   |Y |
             // +--+--+--+--+   +--+   +--+
             // | 1|-1| 1|-1|   |F2|   |P |
             // +--+--+--+--+ * +--+ = +--+
@@ -482,24 +482,24 @@ int main(void)
             /*
              -->inv(M)
                     +---+---+---+---+   +---+   +----+
-                    |-1 | 1 |-1 | 1 |   | Y |   | F1 |
+                    | 1 | 1 |-1 | 1 |   | Y |   | F1 |
                     +---+---+---+---+   +---+   +----+
-                    |-1 |-1 | 1 | 1 |   | P |   | F2 |
+                    | 1 |-1 | 1 | 1 |   | P |   | F2 |
              0.25 * +---+---+---+---+ * +---+ = +----+
-                    | 1 | 1 | 1 | 1 |   | R |   | F3 |
+                    |-1 | 1 | 1 | 1 |   | R |   | F3 |
                     +---+---+---+---+   +---+   +----+
-                    | 1 |-1 |-1 | 1 |   | T |   | F4 |
+                    |-1 |-1 |-1 | 1 |   | T |   | F4 |
                     +---+---+---+---+   +---+   +----+
              per riportare tutto in termini di accelerazione e dati giroscopio
              gamma = 0.25*r/LSB; r=1; T=thrust/4/gamma; dgz,y,x angular acc
                      +---+---+---+---+   +-----+   +----+
-                     |-1 | 1 |-1 | 1 |   | dgz |   | a1 |
+                     | 1 | 1 |-1 | 1 |   | dgz |   | a1 |
                      +---+---+---+---+   +-----+   +----+
-                     |-1 |-1 | 1 | 1 |   | dgy |   | a2 |
+                     | 1 |-1 | 1 | 1 |   | dgy |   | a2 |
              gamma * +---+---+---+---+ * +-----+ = +----+
-                     | 1 | 1 | 1 | 1 |   | dgx |   | a3 |
+                     |-1 | 1 | 1 | 1 |   | dgx |   | a3 |
                      +---+---+---+---+   +-----+   +----+
-                     | 1 |-1 |-1 | 1 |   |  T  |   | a4 |
+                     |-1 |-1 |-1 | 1 |   |  T  |   | a4 |
                      +---+---+---+---+   +-----+   +----+
              */
 
