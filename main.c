@@ -115,12 +115,12 @@ uint32_t pru_rpmsg_rc_factors[8][2] = { { 0 } }; // pru_rpmsg_rc_factors[i][0] =
 int16_t pru_rpmsg_ang_acc_target_prev[3] = { 0 };
 int16_t pru_rpmsg_ang_acc_target[3] = { 0 };
 int32_t pru_rpmsg_ang_accI_target[3] = { 0 };
-int32_t pru_rpmsg_ang_accD_target[3] = { 0 };
+int16_t pru_rpmsg_ang_accD_target[3] = { 0 };
 uint8_t pru_rpmsg_imu_data_changed_flag = 0;
 uint8_t pru_rpmsg_rc_data_changed_flag = 0;
 uint16_t pru_rpmsg_acc_motors_target[4] = { 0 };
 uint8_t pru_rpmsg_acc_motors_changed_flag = 0;
-
+int8_t pru_rpmsg_matrix_A[4][3] = { {1,1,-1},{1,-1,1},{-1,1,1},{-1,-1,-1} };
 /*
     keRoll   = 3.22f; 3.22*2^8 = 824
     keDRoll  = 7.98f; 7.98*2^8 = 2043
@@ -288,6 +288,7 @@ int main(void)
             {
             case MPU_DATA_MSG_TYPE:
             {
+                // calibration costs 1000 bytes
                 if (pru_rpmsg_calibration_samples == 0)
                 {
                     // TODO: verificare se assegnabili direttamente su Gyro della IMU
@@ -364,7 +365,7 @@ int main(void)
                 }
                 break;
             } // end case MPU_DATA_MSG_TYPE
-            case RC_DATA_MSG_TYPE: // 1444 bytes di istruzioni
+            case RC_DATA_MSG_TYPE: // 1936 bytes di istruzioni
             {
                 ASSIGN_SCALED_CHAN_VALUE(received_pru1_data_struct->rc.throttle, PRU_RPMSG_THROTTLE_CHAN);
                 ASSIGN_SCALED_CHAN_VALUE(received_pru1_data_struct->rc.yaw, PRU_RPMSG_YAW_CHAN);
@@ -375,13 +376,6 @@ int main(void)
                 received_pru1_data_struct->rc.aux3 = 0;
                 received_pru1_data_struct->rc.aux4 = 0;
 
-                // I want to send scaled data
-                received_pru1_data_struct->rc.throttle = GET_SCALED_CHAN_VALUE(PRU_RPMSG_THROTTLE_CHAN);
-                received_pru1_data_struct->rc.yaw = GET_SCALED_CHAN_VALUE(PRU_RPMSG_YAW_CHAN);
-                received_pru1_data_struct->rc.pitch = GET_SCALED_CHAN_VALUE(PRU_RPMSG_PITCH_CHAN);
-                received_pru1_data_struct->rc.roll = GET_SCALED_CHAN_VALUE(PRU_RPMSG_ROLL_CHAN);
-                received_pru1_data_struct->rc.aux1 = GET_SCALED_CHAN_VALUE(PRU_RPMSG_AUX1_CHAN);
-                received_pru1_data_struct->rc.aux2 = GET_SCALED_CHAN_VALUE(PRU_RPMSG_AUX2_CHAN);
                 pru_rpmsg_rc_data_changed_flag++;
                 break;
             }
@@ -403,23 +397,24 @@ int main(void)
                 CT_INTC.SRSR0_bit.RAW_STS_31_0 |= (1 << INT_P0_TO_P1);
             }
         } // end if received message from ARM
+        // PID costs 1476 bytes
         else if (pru_rpmsg_imu_data_changed_flag) {
             pru_rpmsg_imu_data_changed_flag = 0;
             pru_rpmsg_rc_data_changed_flag = 0;
 
-            // calculate new values
+            // calculate new values (costs 52 bytes)
             pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW]   =  GET_SCALED_CHAN_VALUE(PRU_RPMSG_YAW_CHAN) - pru_rpmsg_gyro_sample_prev[PRU_RPMSG_Z];
             // nota: lo stick aumenta per diminuire il pitch (lo stick viene negato)
             pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH] =  -GET_SCALED_CHAN_VALUE(PRU_RPMSG_PITCH_CHAN) - pru_rpmsg_gyro_sample_prev[PRU_RPMSG_Y];
             pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL]  =  GET_SCALED_CHAN_VALUE(PRU_RPMSG_ROLL_CHAN) - pru_rpmsg_gyro_sample_prev[PRU_RPMSG_X];
 
             // gamma*inv(A)*(dw/dt)=a
-            // calculate integration
+            // calculate integration (costs 180 bytes)
             pru_rpmsg_ang_accI_target[PRU_RPMSG_YAW] = LIMIT(pru_rpmsg_ang_accI_target[PRU_RPMSG_YAW] + pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW], MAX_SCALED_YAW, -MAX_SCALED_YAW);
             pru_rpmsg_ang_accI_target[PRU_RPMSG_PITCH] = LIMIT(pru_rpmsg_ang_accI_target[PRU_RPMSG_PITCH] + pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH], MAX_SCALED_PITCH, -MAX_SCALED_PITCH);
             pru_rpmsg_ang_accI_target[PRU_RPMSG_ROLL] = LIMIT(pru_rpmsg_ang_accI_target[PRU_RPMSG_ROLL] + pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL], MAX_SCALED_ROLL, -MAX_SCALED_ROLL);
 
-            // calculate derivative
+            // calculate derivative (costs 24 bytes)
             pru_rpmsg_ang_accD_target[PRU_RPMSG_YAW] = pru_rpmsg_ang_acc_target[PRU_RPMSG_YAW] - pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_YAW];
             pru_rpmsg_ang_accD_target[PRU_RPMSG_PITCH] = pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH] - pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_PITCH];
             pru_rpmsg_ang_accD_target[PRU_RPMSG_ROLL] = pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL] - pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_ROLL];
@@ -429,20 +424,14 @@ int main(void)
             pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_PITCH] =  pru_rpmsg_ang_acc_target[PRU_RPMSG_PITCH];
             pru_rpmsg_ang_acc_target_prev[PRU_RPMSG_ROLL]  =  pru_rpmsg_ang_acc_target[PRU_RPMSG_ROLL];
 
-            // motors in [0,1000]
-            pru_rpmsg_acc_motors_target[PRU_RPMSG_M1] = SCALE_MOTORS_VALUE(LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE())
-                   + PID_YPR(PRU_RPMSG_YAW,60) + PID_YPR(PRU_RPMSG_PITCH,250) - PID_YPR(PRU_RPMSG_ROLL,250),1000,0));
-            pru_rpmsg_acc_motors_target[PRU_RPMSG_M2] = SCALE_MOTORS_VALUE(LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE())
-                   + PID_YPR(PRU_RPMSG_YAW,60) - PID_YPR(PRU_RPMSG_PITCH,250) + PID_YPR(PRU_RPMSG_ROLL,250),1000,0));
-            pru_rpmsg_acc_motors_target[PRU_RPMSG_M3] = SCALE_MOTORS_VALUE(LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE())
-                   - PID_YPR(PRU_RPMSG_YAW,60) + PID_YPR(PRU_RPMSG_PITCH,250) + PID_YPR(PRU_RPMSG_ROLL,250),1000,0));
-            pru_rpmsg_acc_motors_target[PRU_RPMSG_M4] = SCALE_MOTORS_VALUE(LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE())
-                   - PID_YPR(PRU_RPMSG_YAW,60) - PID_YPR(PRU_RPMSG_PITCH,250) - PID_YPR(PRU_RPMSG_ROLL,250),1000,0));
-
-            received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M1] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M1];
-            received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M2] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M2];
-            received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M3] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M3];
-            received_pru1_data_struct->motors_vect.m[PRU_RPMSG_M4] = pru_rpmsg_acc_motors_target[PRU_RPMSG_M4];
+            // motors in [0,1000] (costs 1084 bytes)
+            for(pru_rpmsg_temp = 0; pru_rpmsg_temp < 4; pru_rpmsg_temp++) {
+                pru_rpmsg_acc_motors_target[pru_rpmsg_temp] = SCALE_MOTORS_VALUE(LIMIT(FXPOINT20_MULTIPLY(LSB_FIXPOINT_20, SHIFT_THROTTLE())
+                       + pru_rpmsg_matrix_A[pru_rpmsg_temp][PRU_RPMSG_YAW]*PID_YPR(PRU_RPMSG_YAW,60)
+                       + pru_rpmsg_matrix_A[pru_rpmsg_temp][PRU_RPMSG_PITCH]*PID_YPR(PRU_RPMSG_PITCH,250)
+                       + pru_rpmsg_matrix_A[pru_rpmsg_temp][PRU_RPMSG_ROLL]*PID_YPR(PRU_RPMSG_ROLL,250),1000,0));
+                received_pru1_data_struct->motors_vect.m[pru_rpmsg_temp] = pru_rpmsg_acc_motors_target[pru_rpmsg_temp];
+            }
 
             received_pru1_data_struct->message_type = MOTORS_DATA_MSG_TYPE;
             pru_rpmsg_send(&transport, dst, src, received_pru1_data,
