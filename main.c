@@ -366,14 +366,6 @@ int main(void)
             } // end case MPU_DATA_MSG_TYPE
             case RC_DATA_MSG_TYPE: // 1444 bytes di istruzioni
             {
-                // TODO: inviarli già divisi in modo da usare uint16_t
-                received_pru1_data_struct->rc.throttle /= 100;
-                received_pru1_data_struct->rc.yaw      /= 100;
-                received_pru1_data_struct->rc.pitch    /= 100;
-                received_pru1_data_struct->rc.roll     /= 100;
-                received_pru1_data_struct->rc.aux1     /= 100;
-                received_pru1_data_struct->rc.aux2     /= 100;
-
                 ASSIGN_SCALED_CHAN_VALUE(received_pru1_data_struct->rc.throttle, PRU_RPMSG_THROTTLE_CHAN);
                 ASSIGN_SCALED_CHAN_VALUE(received_pru1_data_struct->rc.yaw, PRU_RPMSG_YAW_CHAN);
                 ASSIGN_SCALED_CHAN_VALUE(received_pru1_data_struct->rc.pitch, PRU_RPMSG_PITCH_CHAN);
