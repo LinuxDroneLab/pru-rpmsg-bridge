@@ -1,9 +1,6 @@
-#include <prb_gyro_utils.h>
-#include <prb_rc_utils.h>
-#include <prb_motors_utils.h>
-#include <prb_pid.h>
 #include <prb_pwmss.h>
 #include <stdint.h>
+#include <prb_rc_utils.h>
 #include <pru_cfg.h>
 #include <pru_intc.h>
 #include <pru_rpmsg.h>
@@ -25,10 +22,6 @@ PrbMessageType* received_pru1_data_struct = (PrbMessageType*) received_pru1_data
 // 0,015267372
 
 int counter32 = 0;
-int16_t pru_rpmsg_discard_samples = 5000;
-uint8_t pru_rpmsg_imu_data_changed_flag = 0;
-uint8_t pru_rpmsg_rc_data_changed_flag = 0;
-uint8_t pru_rpmsg_acc_motors_changed_flag = 0;
 uint16_t* pru_rpmsg_motors_ptr;
 
 static void prb_init_buffers()
@@ -123,32 +116,33 @@ int main(void)
         if (CT_INTC.SECR0_bit.ENA_STS_31_0 & (1 << INT_P1_TO_P0))
         {
             CT_INTC.SICR_bit.STS_CLR_IDX = INT_P1_TO_P0;
-            // send data from PRU1 to ARM
             __xin(SP_BANK_1, 6, 0, received_pru1_data);
             switch (received_pru1_data_struct->message_type)
             {
             case MPU_DATA_MSG_TYPE:
             {
-                // calibration costs 1000 bytes
-                if (pru_rpmsg_discard_samples > 0)
-                {
-                    pru_rpmsg_discard_samples--;
-                } else {
-                    prb_gyro_filter_sample(received_pru1_data_struct);
-                    if(prb_is_gyro_calibration_active() == 0) {
-                        pru_rpmsg_imu_data_changed_flag = 1;
-                    }
-                }
+                // nothing to do ... send data as is to the ARM
                 break;
             } // end case MPU_DATA_MSG_TYPE
             case RC_DATA_MSG_TYPE: // 1936 bytes di istruzioni
             {
+                // scale RC Data
                 prb_rc_utils_scale(received_pru1_data_struct);
-                pru_rpmsg_rc_data_changed_flag=1;
+                received_pru1_data_struct->rc.throttle= prb_rc_utils_get_shifted_throttle();
+                received_pru1_data_struct->rc.yaw= prb_rc_utils_get_scaled_chan_value(PRU_RPMSG_YAW_CHAN);
+                received_pru1_data_struct->rc.pitch= prb_rc_utils_get_scaled_chan_value(PRU_RPMSG_PITCH_CHAN);
+                received_pru1_data_struct->rc.roll= prb_rc_utils_get_scaled_chan_value(PRU_RPMSG_ROLL_CHAN);
+                received_pru1_data_struct->rc.aux1= prb_rc_utils_get_scaled_chan_value(PRU_RPMSG_AUX1_CHAN);
+                received_pru1_data_struct->rc.aux2= prb_rc_utils_get_scaled_chan_value(PRU_RPMSG_AUX2_CHAN);
+                received_pru1_data_struct->rc.aux3= 0;
+                received_pru1_data_struct->rc.aux4= 0;
+
                 break;
             }
                 // end case RC_DATA_MSG_TYPE
             } // end switch
+
+            // send data from PRU1 to ARM
             pru_rpmsg_send(&transport, dst, src, received_pru1_data,
                            sizeof(PrbMessageType));
         } // end if received message from P1
@@ -166,19 +160,20 @@ int main(void)
             }
         } // end if received message from ARM
         // PID costs 1476 bytes
-        else if (pru_rpmsg_imu_data_changed_flag) {
-
-            pru_rpmsg_imu_data_changed_flag = 0;
-            pru_rpmsg_rc_data_changed_flag = 0;
-            prb_pid_calculate();
-            prb_motors_calculate(received_pru1_data_struct);
-            received_pru1_data_struct->message_type = MOTORS_DATA_MSG_TYPE;
-            pru_rpmsg_motors_ptr = prb_motors_get_motors_target();
-
-            pru_pwmss_lib_SetDuty(PWMSS_DEVICE_FRONT, pru_rpmsg_motors_ptr[PRB_MOTORS_FRONT_LEFT-1], pru_rpmsg_motors_ptr[PRB_MOTORS_FRONT_RIGHT-1]);
-            pru_pwmss_lib_SetDuty(PWMSS_DEVICE_REAR, pru_rpmsg_motors_ptr[PRB_MOTORS_REAR_LEFT-1], pru_rpmsg_motors_ptr[PRB_MOTORS_REAR_RIGHT-1]);
-            pru_rpmsg_send(&transport, dst, src, received_pru1_data, sizeof(PrbMessageType));
-
-        }
+        // TODO: da rifare: riceve dati motori da ARM ed esegue setDuty
+//        else if (pru_rpmsg_imu_data_changed_flag) {
+//
+//            pru_rpmsg_imu_data_changed_flag = 0;
+//            pru_rpmsg_rc_data_changed_flag = 0;
+//            prb_pid_calculate();
+//            prb_motors_calculate(received_pru1_data_struct);
+//            received_pru1_data_struct->message_type = MOTORS_DATA_MSG_TYPE;
+//            pru_rpmsg_motors_ptr = prb_motors_get_motors_target();
+//
+//            pru_pwmss_lib_SetDuty(PWMSS_DEVICE_FRONT, pru_rpmsg_motors_ptr[PRB_MOTORS_FRONT_LEFT-1], pru_rpmsg_motors_ptr[PRB_MOTORS_FRONT_RIGHT-1]);
+//            pru_pwmss_lib_SetDuty(PWMSS_DEVICE_REAR, pru_rpmsg_motors_ptr[PRB_MOTORS_REAR_LEFT-1], pru_rpmsg_motors_ptr[PRB_MOTORS_REAR_RIGHT-1]);
+//            pru_rpmsg_send(&transport, dst, src, received_pru1_data, sizeof(PrbMessageType));
+//
+//        }
     }
 }

@@ -76,6 +76,31 @@ void prb_init_rc_factors()
                             - (PRU_RPMSG_RC_CENTER_DEADBAND
                                     + pru_rpmsg_rc_conf[PRU_RPMSG_PITCH_CHAN - 1][PRU_RPMSG_RC_CENTER_RANGE_POS]));
 
+    pru_rpmsg_rc_factors[PRU_RPMSG_AUX1_CHAN - 1][PRU_RPMSG_RC_LEFT_RANGE] =
+            (1073152000)
+                    / (pru_rpmsg_rc_conf[PRU_RPMSG_AUX1_CHAN - 1][PRU_RPMSG_RC_CENTER_RANGE_POS]
+                            - (PRU_RPMSG_RC_CENTER_DEADBAND
+                                    + pru_rpmsg_rc_conf[PRU_RPMSG_AUX1_CHAN
+                                            - 1][PRU_RPMSG_RC_MIN_RANGE_POS]));
+    pru_rpmsg_rc_factors[PRU_RPMSG_AUX1_CHAN - 1][PRU_RPMSG_RC_RIGHT_RANGE] =
+            (1073152000)
+                    / (pru_rpmsg_rc_conf[PRU_RPMSG_AUX1_CHAN - 1][PRU_RPMSG_RC_MAX_RANGE_POS]
+                            - (PRU_RPMSG_RC_CENTER_DEADBAND
+                                    + pru_rpmsg_rc_conf[PRU_RPMSG_AUX1_CHAN
+                                            - 1][PRU_RPMSG_RC_CENTER_RANGE_POS]));
+
+    pru_rpmsg_rc_factors[PRU_RPMSG_AUX2_CHAN - 1][PRU_RPMSG_RC_LEFT_RANGE] =
+            (1073152000)
+                    / (pru_rpmsg_rc_conf[PRU_RPMSG_AUX2_CHAN - 1][PRU_RPMSG_RC_CENTER_RANGE_POS]
+                            - (PRU_RPMSG_RC_CENTER_DEADBAND
+                                    + pru_rpmsg_rc_conf[PRU_RPMSG_AUX2_CHAN
+                                            - 1][PRU_RPMSG_RC_MIN_RANGE_POS]));
+    pru_rpmsg_rc_factors[PRU_RPMSG_AUX2_CHAN - 1][PRU_RPMSG_RC_RIGHT_RANGE] =
+            (1073152000)
+                    / (pru_rpmsg_rc_conf[PRU_RPMSG_AUX2_CHAN - 1][PRU_RPMSG_RC_MAX_RANGE_POS]
+                            - (PRU_RPMSG_RC_CENTER_DEADBAND
+                                    + pru_rpmsg_rc_conf[PRU_RPMSG_AUX2_CHAN
+                                            - 1][PRU_RPMSG_RC_CENTER_RANGE_POS]));
 }
 
 void prb_rc_utils_scale(PrbMessageType* received_pru1_data_struct) {
