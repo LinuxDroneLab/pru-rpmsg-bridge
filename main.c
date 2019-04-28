@@ -18,6 +18,7 @@ unsigned short src, dst, len;
 unsigned char received_arm_data[sizeof(PrbMessageType)] = { '\0' };
 unsigned char received_pru1_data[sizeof(PrbMessageType)] = { '\0' };
 PrbMessageType* received_pru1_data_struct = (PrbMessageType*) received_pru1_data;
+PrbMessageType* received_arm_data_struct = (PrbMessageType*) received_arm_data;
 
 // 0,015267372
 
@@ -157,6 +158,26 @@ int main(void)
                 __xout(SP_BANK_0, 3, 0, received_arm_data);
                 // send interrupt to P1
                 CT_INTC.SRSR0_bit.RAW_STS_31_0 |= (1 << INT_P0_TO_P1);
+
+                switch (received_arm_data_struct->message_type)
+                {
+                case MPU_CREATE_CHANNEL_MSG_TYPE:
+                {
+                    while (pru_rpmsg_channel(RPMSG_NS_CREATE, &transport, RPMSG_MPU_CHAN_NAME,
+                        RPMSG_MPU_CHAN_DESC,
+                                                 RPMSG_MPU_CHAN_PORT) != PRU_RPMSG_SUCCESS)
+                            ;
+                    break;
+                } // end case MPU_CREATE_CHANNEL
+                case MPU_DESTROY_CHANNEL_MSG_TYPE:
+                {
+                    while (pru_rpmsg_channel(RPMSG_NS_DESTROY, &transport, RPMSG_MPU_CHAN_NAME,
+                        RPMSG_MPU_CHAN_DESC,
+                                                 RPMSG_MPU_CHAN_PORT) != PRU_RPMSG_SUCCESS)
+                            ;
+                    break;
+                } // end case MPU_DESTROY_CHANNEL_MSG_TYPE
+                } // end switch
             }
         } // end if received message from ARM
         // PID costs 1476 bytes
