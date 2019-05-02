@@ -84,10 +84,10 @@ struct ch_map pru_intc_map[] = {{INT_P0_TO_ARM, CHNL_PRU0_TO_ARM},
   *
   * RPMSG_CHAN_DESC : description of the rpmsg channel.
   */
- #define RPMSG_CHAN_NAME                 "pru-mylinuxdrone"
+ #define RPMSG_CHAN_NAME                 "pru-control"
  #define RPMSG_CHAN_PORT                 30
  #define RPMSG_CHAN_DESC                 "Channel 30"
- #define RPMSG_MPU_CHAN_NAME             "pru-mpu6050"
+ #define RPMSG_MPU_CHAN_NAME             "pru-imu"
  #define RPMSG_MPU_CHAN_PORT             32
  #define RPMSG_MPU_CHAN_DESC             "Channel 32"
 
