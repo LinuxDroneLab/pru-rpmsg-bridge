@@ -118,11 +118,15 @@ int main(void)
         {
             CT_INTC.SICR_bit.STS_CLR_IDX = INT_P1_TO_P0;
             __xin(SP_BANK_1, 6, 0, received_pru1_data);
+            // TODO: aggiungere i case per ogni msg type e usare canali diversi
             switch (received_pru1_data_struct->message_type)
             {
             case MPU_DATA_MSG_TYPE:
             {
                 // nothing to do ... send data as is to the ARM
+                // send data from PRU1 to ARM
+                pru_rpmsg_send(&transport, RPMSG_MPU_CHAN_PORT, src, received_pru1_data,
+                               sizeof(PrbMessageType));
                 break;
             } // end case MPU_DATA_MSG_TYPE
             case RC_DATA_MSG_TYPE: // 1936 bytes di istruzioni
@@ -138,14 +142,14 @@ int main(void)
                 received_pru1_data_struct->rc.aux3= 0;
                 received_pru1_data_struct->rc.aux4= 0;
 
+                // send data from PRU1 to ARM
+                pru_rpmsg_send(&transport, RPMSG_RC_CHAN_PORT, src, received_pru1_data,
+                               sizeof(PrbMessageType));
                 break;
             }
                 // end case RC_DATA_MSG_TYPE
             } // end switch
 
-            // send data from PRU1 to ARM
-            pru_rpmsg_send(&transport, dst, src, received_pru1_data,
-                           sizeof(PrbMessageType));
         } // end if received message from P1
         // received message from ARM
         else if (CT_INTC.SECR0_bit.ENA_STS_31_0 & (1 << INT_ARM_TO_P0))
@@ -161,6 +165,7 @@ int main(void)
 
                 switch (received_arm_data_struct->message_type)
                 {
+                // TODO: aggiungere i case per ogni canale
                 case MPU_CREATE_CHANNEL_MSG_TYPE:
                 {
                     while (pru_rpmsg_channel(RPMSG_NS_CREATE, &transport, RPMSG_MPU_CHAN_NAME,
@@ -177,6 +182,22 @@ int main(void)
                             ;
                     break;
                 } // end case MPU_DESTROY_CHANNEL_MSG_TYPE
+                case RC_CREATE_CHANNEL_MSG_TYPE:
+                {
+                    while (pru_rpmsg_channel(RPMSG_NS_CREATE, &transport, RPMSG_RC_CHAN_NAME,
+                        RPMSG_RC_CHAN_DESC,
+                                                 RPMSG_RC_CHAN_PORT) != PRU_RPMSG_SUCCESS)
+                            ;
+                    break;
+                } // end case RC_CREATE_CHANNEL
+                case RC_DESTROY_CHANNEL_MSG_TYPE:
+                {
+                    while (pru_rpmsg_channel(RPMSG_NS_DESTROY, &transport, RPMSG_RC_CHAN_NAME,
+                        RPMSG_RC_CHAN_DESC,
+                                                 RPMSG_RC_CHAN_PORT) != PRU_RPMSG_SUCCESS)
+                            ;
+                    break;
+                } // end case RC_DESTROY_CHANNEL_MSG_TYPE
                 } // end switch
             }
         } // end if received message from ARM

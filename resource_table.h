@@ -86,10 +86,13 @@ struct ch_map pru_intc_map[] = {{INT_P0_TO_ARM, CHNL_PRU0_TO_ARM},
   */
  #define RPMSG_CHAN_NAME                 "pru-control"
  #define RPMSG_CHAN_PORT                 30
- #define RPMSG_CHAN_DESC                 "Channel 30"
+ #define RPMSG_CHAN_DESC                 "Control Channel"
  #define RPMSG_MPU_CHAN_NAME             "pru-imu"
  #define RPMSG_MPU_CHAN_PORT             32
- #define RPMSG_MPU_CHAN_DESC             "Channel 32"
+ #define RPMSG_MPU_CHAN_DESC             "Imu Channel"
+ #define RPMSG_RC_CHAN_NAME              "pru-rc"
+ #define RPMSG_RC_CHAN_PORT              34
+ #define RPMSG_RC_CHAN_DESC              "RC Channel"
 
 
 
