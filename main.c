@@ -14,7 +14,7 @@ volatile register uint32_t __R30;
 volatile register uint32_t __R31;
 
 struct pru_rpmsg_transport transport;
-unsigned short src, dst, len;
+unsigned short src, dst, len, src_mpu_channel, src_rc_channel;
 unsigned char received_arm_data[sizeof(PrbMessageType)] = { '\0' };
 unsigned char received_pru1_data[sizeof(PrbMessageType)] = { '\0' };
 PrbMessageType* received_pru1_data_struct = (PrbMessageType*) received_pru1_data;
@@ -110,7 +110,8 @@ int main(void)
 
     pru_pwmss_lib_Start(PWMSS_DEVICE_FRONT);
     pru_pwmss_lib_Start(PWMSS_DEVICE_REAR);
-
+    src_mpu_channel = 0;
+    src_rc_channel = 0;
     while (1)
     {
         // receive data from PRU1
@@ -125,8 +126,10 @@ int main(void)
             {
                 // nothing to do ... send data as is to the ARM
                 // send data from PRU1 to ARM
-                pru_rpmsg_send(&transport, RPMSG_MPU_CHAN_PORT, src, received_pru1_data,
-                               sizeof(PrbMessageType));
+                if(src_mpu_channel != 0) {
+                    pru_rpmsg_send(&transport, RPMSG_MPU_CHAN_PORT, src_mpu_channel, received_pru1_data,
+                                   sizeof(PrbMessageType));
+                }
                 break;
             } // end case MPU_DATA_MSG_TYPE
             case RC_DATA_MSG_TYPE: // 1936 bytes di istruzioni
@@ -142,9 +145,11 @@ int main(void)
                 received_pru1_data_struct->rc.aux3= 0;
                 received_pru1_data_struct->rc.aux4= 0;
 
-                // send data from PRU1 to ARM
-                pru_rpmsg_send(&transport, RPMSG_RC_CHAN_PORT, src, received_pru1_data,
-                               sizeof(PrbMessageType));
+                if(src_rc_channel != 0) {
+                    // send data from PRU1 to ARM
+                    pru_rpmsg_send(&transport, RPMSG_RC_CHAN_PORT, src_rc_channel, received_pru1_data,
+                                   sizeof(PrbMessageType));
+                }
                 break;
             }
                 // end case RC_DATA_MSG_TYPE
@@ -166,6 +171,17 @@ int main(void)
                 switch (received_arm_data_struct->message_type)
                 {
                 // TODO: aggiungere i case per ogni canale
+                // disabilitare prima il sensore relativo al canale
+                case MPU_ENABLE_MSG_TYPE:
+                {
+                    src_mpu_channel = src;
+                    break;
+                }
+                case MPU_DISABLE_MSG_TYPE:
+                {
+                    src_mpu_channel = src;
+                    break;
+                }
                 case MPU_CREATE_CHANNEL_MSG_TYPE:
                 {
                     while (pru_rpmsg_channel(RPMSG_NS_CREATE, &transport, RPMSG_MPU_CHAN_NAME,
@@ -182,6 +198,16 @@ int main(void)
                             ;
                     break;
                 } // end case MPU_DESTROY_CHANNEL_MSG_TYPE
+                case RC_ENABLE_MSG_TYPE:
+                {
+                    src_rc_channel = src;
+                    break;
+                }
+                case RC_DISABLE_MSG_TYPE:
+                {
+                    src_rc_channel = src;
+                    break;
+                }
                 case RC_CREATE_CHANNEL_MSG_TYPE:
                 {
                     while (pru_rpmsg_channel(RPMSG_NS_CREATE, &transport, RPMSG_RC_CHAN_NAME,
